@@ -139,15 +139,25 @@ for image in imageName:
     for i, page in enumerate(pages):
         # cv2.imshow('image', cv2.resize(page, (480, 640)))
         # cv2.waitKey(0)
-
-        hist = cv2.reduce(page, 0, cv2.REDUCE_AVG).reshape(-1)
-        th = max(list(filter(lambda x: x < 255, hist)))
         h, w = page.shape[:2]
 
+        dst = cv2.erode(page, kernel=np.ones((30, 10)))
+        hist = cv2.reduce(dst, 0, cv2.REDUCE_AVG).reshape(-1)
+        th = min(list(filter(lambda x: x > 245 and x < 255, hist)))
         uppers = [y for y in range(w-1) if hist[y]>th and hist[y+1]<=th]
+
+        if (i == 0):
+            # dst = cv2.erode(page, kernel=np.ones((60, 10)))
+            # hist = cv2.reduce(page, 0, cv2.REDUCE_AVG).reshape(-1)
+            th = min(list(filter(lambda x: x > 250 and x < 255, hist)))
+        else:
+            hist = cv2.reduce(page, 0, cv2.REDUCE_AVG).reshape(-1)
+            th = min(list(filter(lambda x: x > 240 and x < 255, hist)))
         lowers = [y for y in range(w-1) if hist[y]<=th and hist[y+1]>th]
         # print(uppers)
         # print(lowers)
+        # for k in range(len(uppers)):
+        #     cv2.line(page, (uppers[k], 0), (uppers[k], h), (0,255,0), 3)
         # for k in range(len(lowers)):
         #     cv2.line(page, (lowers[k], 0), (lowers[k], h), (0,255,0), 3)
         #
@@ -165,9 +175,10 @@ for image in imageName:
         rightCols = list(filter(lambda x: lowers[x[1]] > 2 * w / 3, potentialPair))
         # print(len(rightCols))
 
+        if (len(leftCols) == 0 or len(rightCols) == 0):
+            print("File " + image + "error! Please recheck it.")
         leftCol = min(leftCols, key=lambda x: lowers[x[1]] - uppers[x[0]])
         rightCol = min(rightCols, key=lambda x: lowers[x[1]] - uppers[x[0]])
-
 
         expand = round((lowers[leftCol[1]] - uppers[leftCol[0]]) * 0.03)
         colList.append(page[0:h,uppers[leftCol[0]] - expand:lowers[leftCol[1]] + expand])
@@ -176,23 +187,22 @@ for image in imageName:
         colList.append(page[0:h,uppers[rightCol[0]] - expand:lowers[rightCol[1]] + expand])
 
 
-
     # Skew correction for each column
     for i, col in enumerate(colList):
         gray = cv2.bitwise_not(col)
         pts = cv2.findNonZero(gray)
         ret = cv2.minAreaRect(pts)
 
-        (cx,cy), (w,h), ang = ret
-        if w>h:
-            w,h = h,w
-            ang += 90
+        (cx,cy), (w,h), angle = ret
+        if angle < -45:
+        	angle = -(90 + angle)
+        else:
+        	angle = -angle
 
         M = cv2.getRotationMatrix2D((cx,cy), ang, 1.0)
         rotated = cv2.warpAffine(col, M, (col.shape[1], col.shape[0]), flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_REPLICATE)
         colList[i] = rotated
         cv2.imwrite(columnDir + '/' + image[0:-4] + '-' + str(i) + '.jpg', rotated)
-
 
     # Split line
     lineCrop = []
